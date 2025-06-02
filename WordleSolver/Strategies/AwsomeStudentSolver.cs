@@ -1,5 +1,6 @@
 
 using System.Collections.Generic;
+using System.Net;
 
 namespace WordleSolver.Strategies;
 
@@ -9,17 +10,17 @@ namespace WordleSolver.Strategies;
 /// </summary>
 public sealed class AwsomeStudentSolver : IWordleSolverStrategy
 {
-	/// <summary>Absolute or relative path of the word-list file.</summary>
-	private static readonly string WordListPath = Path.Combine("data", "wordle.txt");
+    /// <summary>Absolute or relative path of the word-list file.</summary>
+    private static readonly string WordListPath = Path.Combine("data", "wordle.txt");
 
-	/// <summary>In-memory dictionary of valid five-letter words.</summary>
-	private static readonly List<string> WordList = LoadWordList();
+    /// <summary>In-memory dictionary of valid five-letter words.</summary>
+    private static readonly List<string> WordList = LoadWordList();
 
     /// <summary>
     /// Remaining words that can be chosen
     /// </summary>
     private List<string> _remainingWords = new();
-    
+
     // TODO: ADD your own private variables that you might need
 
     /// <summary>
@@ -27,24 +28,24 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
     /// </summary>
     private static List<string> LoadWordList()
     {
-	    if (!File.Exists(WordListPath))
-		    throw new FileNotFoundException($"Word list not found at path: {WordListPath}");
+        if (!File.Exists(WordListPath))
+            throw new FileNotFoundException($"Word list not found at path: {WordListPath}");
 
-	    return File.ReadAllLines(WordListPath)
-		    .Select(w => w.Trim().ToLowerInvariant())
-		    .Where(w => w.Length == 5)
-		    .Distinct()
-		    .ToList();
+        return File.ReadAllLines(WordListPath)
+            .Select(w => w.Trim().ToLowerInvariant())
+            .Where(w => w.Length == 5)
+            .Distinct()
+            .ToList();
     }
 
     /// <inheritdoc/>
     public void Reset()
     {
-		// TODO: What should happen when a new game starts?
+        // TODO: What should happen when a new game starts?
 
-		// If using SLOW student strategy, we just reset the current index
-		// to the first word to start the next guessing sequence
-        _remainingWords = [..WordList];  // Set _remainingWords to a copy of the full word list
+        // If using SLOW student strategy, we just reset the current index
+        // to the first word to start the next guessing sequence
+        _remainingWords = [.. WordList];  // Set _remainingWords to a copy of the full word list
     }
 
     /// <summary>
@@ -71,12 +72,14 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
             // program won't work. Regular Wordle allows users to guess any five-letter
             // word from a much larger dictionary, but we restrict it to the words that
             // can actually be chosen by WordleService to make it easier on you.
-            string firstWord = "crane"; 
+            string firstWord = "crane";
 
             // Filter _remainingWords to remove any words that don't match the first word
             _remainingWords.Remove(firstWord);
 
-            return firstWord;  
+            // Console.WriteLine(firstWord);
+
+            return firstWord;
         }
         else
         {
@@ -167,8 +170,33 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
                 }
             }
 
-            // stop using words that have an unused letter
-            List<string> unusedLetters = new();
+            if (!WordHasDupes(previousResult.Word))
+            {
+
+                // stop using words that have an unused letter
+                List<string> unusedLetters = new();
+                char[] previousChars = previousResult.Word.ToCharArray();
+                for (int i = 0; i < 5; i++)
+                {
+                    if (previousResult.LetterStatuses[i] == LetterStatus.Unused)
+                    {
+                        unusedLetters.Add(previousChars[i].ToString());
+                    }
+                }
+
+                for (int word = 0; word < _remainingWords.Count; word++)
+                {
+                    for (int i = 0; i < unusedLetters.Count; i++)
+                    {
+                        if (_remainingWords[word].Contains(unusedLetters[i]))
+                        {
+                            _remainingWords.RemoveAt(word);
+                            word--;
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
         // Utilize the remaining words to choose the next guess
@@ -176,6 +204,24 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
         _remainingWords.Remove(choice);
 
         return choice;
+    }
+
+    bool WordHasDupes(string word)
+    {
+        char[] letters = word.ToCharArray();
+
+        for (int i = 0; i < letters.Length; i++)
+        {
+            for (int j = i + 1; j < letters.Length; j++)
+            {
+                if (letters[j] == letters[i])
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -191,7 +237,7 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
             throw new InvalidOperationException("No remaining words to choose from");
 
         // Obviously the first word is the best right?
-        Console.WriteLine(_remainingWords.First());
-        return _remainingWords.First();  
+        // Console.WriteLine(_remainingWords.First());
+        return _remainingWords.First();
     }
 }
