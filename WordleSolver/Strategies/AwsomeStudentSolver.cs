@@ -21,6 +21,8 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
     /// </summary>
     private List<string> _remainingWords = new();
 
+    public Dictionary<string, int> LetterPointVal = new();
+
     // TODO: ADD your own private variables that you might need
 
     /// <summary>
@@ -46,6 +48,36 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
         // If using SLOW student strategy, we just reset the current index
         // to the first word to start the next guessing sequence
         _remainingWords = [.. WordList];  // Set _remainingWords to a copy of the full word list
+        if (LetterPointVal.Count == 0)
+        {
+            LetterPointVal = GetPointDict();
+        }
+    }
+
+    Dictionary<string, int> GetPointDict()
+    {
+        char[] letters = "abcdefghijklmnopqrstuvwxyz".ToCharArray();
+
+        Dictionary<string, int> dict = new();
+
+        foreach (string word in WordList)
+        {
+            char[] wordLetters = word.ToCharArray();
+            for (int i = 0; i < wordLetters.Length; i++)
+            {
+                string letter = wordLetters[i].ToString();
+                if (dict.ContainsKey(letter))
+                {
+                    dict[letter]++;
+                }
+                else
+                {
+                    dict.Add(letter, 1);
+                }
+            }
+        }
+
+        return dict;
     }
 
     /// <summary>
@@ -238,6 +270,27 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
 
         // Obviously the first word is the best right?
         // Console.WriteLine(_remainingWords.First());
-        return _remainingWords.First();
+        string topWord = _remainingWords.First();
+        int topScore = 0;
+        for (int word = 0; word < _remainingWords.Count; word++)
+        {
+            char[] letters = _remainingWords[word].ToCharArray();
+            letters = letters.Distinct().ToArray();
+
+            int score = 0;
+            foreach (char letter in letters)
+            {
+                score += LetterPointVal[letter.ToString()];
+            }
+
+            if (score > topScore)
+            {
+                topWord = _remainingWords[word];
+                topScore = score;
+            }
+        }
+
+        // return _remainingWords.First();
+        return topWord;
     }
 }
