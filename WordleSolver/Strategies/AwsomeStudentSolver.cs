@@ -1,4 +1,5 @@
 
+using System;
 using System.Collections.Generic;
 using System.Net;
 
@@ -112,6 +113,7 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
             // word from a much larger dictionary, but we restrict it to the words that
             // can actually be chosen by WordleService to make it easier on you.
             string firstWord = "crane";
+            //string firstWord = GetHighestWordScore(WordList);
 
             // Filter _remainingWords to remove any words that don't match the first word
             _remainingWords.Remove(firstWord);
@@ -268,6 +270,32 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
 
         return false;
     }
+    
+    // find the word in the given list that has the hightest letter frequency score
+    string GetHighestWordScore(List<string> words)
+    {
+        string topWord = words.First();
+        int topScore = 0;
+        for (int word = 0; word < words.Count; word++)
+        {
+            char[] letters = words[word].ToCharArray();
+            letters = letters.Distinct().ToArray();
+
+            int score = 0;
+            foreach (char letter in letters)
+            {
+                score += LetterPointVal[letter.ToString()];
+            }
+
+            if (score > topScore)
+            {
+                topWord = words[word];
+                topScore = score;
+            }
+        }
+
+        return topWord;
+    }
 
     /// <summary>
     /// Pick the best of the remaining words according to some heuristic.
@@ -282,25 +310,7 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
             throw new InvalidOperationException("No remaining words to choose from");
 
         // score each word based on popularity of their letters
-        string topWord = _remainingWords.First();
-        int topScore = 0;
-        for (int word = 0; word < _remainingWords.Count; word++)
-        {
-            char[] letters = _remainingWords[word].ToCharArray();
-            letters = letters.Distinct().ToArray();
-
-            int score = 0;
-            foreach (char letter in letters)
-            {
-                score += LetterPointVal[letter.ToString()];
-            }
-
-            if (score > topScore)
-            {
-                topWord = _remainingWords[word];
-                topScore = score;
-            }
-        }
+        string topWord = GetHighestWordScore(_remainingWords);
 
         // return _remainingWords.First();
         // Console.WriteLine(topWord);
