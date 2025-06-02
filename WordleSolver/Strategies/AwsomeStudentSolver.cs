@@ -21,6 +21,9 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
     /// </summary>
     private List<string> _remainingWords = new();
 
+    /// <summary>
+    /// Each letter is given a value based on popularity
+    /// </summary>
     public Dictionary<string, int> LetterPointVal = new();
 
     // TODO: ADD your own private variables that you might need
@@ -48,6 +51,7 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
         // If using SLOW student strategy, we just reset the current index
         // to the first word to start the next guessing sequence
         _remainingWords = [.. WordList];  // Set _remainingWords to a copy of the full word list
+        // fills the dictionary by finding how many times each letter appears in the word list
         if (LetterPointVal.Count == 0)
         {
             LetterPointVal = GetPointDict();
@@ -56,12 +60,15 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
 
     Dictionary<string, int> GetPointDict()
     {
+        // gets an array of the alphabet
         char[] letters = "abcdefghijklmnopqrstuvwxyz".ToCharArray();
 
         Dictionary<string, int> dict = new();
 
+        // loops through each word in the wordlist
         foreach (string word in WordList)
         {
+            // turns the word into a character array and adds each letter to the dictionary when found
             char[] wordLetters = word.ToCharArray();
             for (int i = 0; i < wordLetters.Length; i++)
             {
@@ -184,6 +191,7 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
                 }
             }
 
+            // removes words from the list if they have a misplaced letter in the same spot as the last guess
             for (int word = 0; word < _remainingWords.Count; word++)
             {
                 char[] wordChars = _remainingWords[word].ToCharArray();
@@ -202,6 +210,7 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
                 }
             }
 
+            // removes words that contain letters we know are unused.
             if (!WordHasDupes(previousResult.Word))
             {
 
@@ -228,6 +237,10 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
                         }
                     }
                 }
+            }
+            else
+            {
+
             }
         }
 
@@ -268,8 +281,7 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
         if (_remainingWords.Count == 0)
             throw new InvalidOperationException("No remaining words to choose from");
 
-        // Obviously the first word is the best right?
-        // Console.WriteLine(_remainingWords.First());
+        // score each word based on popularity of their letters
         string topWord = _remainingWords.First();
         int topScore = 0;
         for (int word = 0; word < _remainingWords.Count; word++)
@@ -291,6 +303,7 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
         }
 
         // return _remainingWords.First();
+        // Console.WriteLine(topWord);
         return topWord;
     }
 }
