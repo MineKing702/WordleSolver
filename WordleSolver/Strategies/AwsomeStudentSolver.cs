@@ -6,8 +6,13 @@ using System.Net;
 namespace WordleSolver.Strategies;
 
 /// <summary>
-/// Example solver that simply iterates through a fixed list of words.
-/// Students will replace this with a smarter algorithm.
+/// Step 1: create a dictionary that holds how many times each letter appears in the word list
+/// Step 2: always start with the word crane
+/// step 3: filter out words that contain unused letters
+/// step 4: filter out words that dont have correct letters in the correct spot
+/// step 5: filter out words that have misplaced letters in the same spot
+/// step 6: filter out words that have unused letters again
+/// step 7: guess a word from the filtered list based on letter frequency
 /// </summary>
 public sealed class AwsomeStudentSolver : IWordleSolverStrategy
 {
@@ -118,8 +123,6 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
             // Filter _remainingWords to remove any words that don't match the first word
             _remainingWords.Remove(firstWord);
 
-            // Console.WriteLine(firstWord);
-
             return firstWord;
         }
         else
@@ -181,7 +184,7 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
                 }
             }
 
-            // find all the correct letters and saves their index
+            // find all the misplaced letters and saves their index
             List<int> misplacedIndexes = new();
             List<string> misplacedLetters = new();
             for (int i = 0; i < 5; i++)
@@ -239,10 +242,6 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
                         }
                     }
                 }
-            }
-            else
-            {
-
             }
         }
 
@@ -313,7 +312,6 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
         string topWord = GetHighestWordScore(_remainingWords);
 
         // return _remainingWords.First();
-        // Console.WriteLine(topWord);
         return topWord;
     }
 }
