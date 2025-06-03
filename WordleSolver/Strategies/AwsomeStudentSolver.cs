@@ -142,9 +142,24 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
             }
         }
 
-        _remainingWords = _remainingWords
-            .Where(word => usedLetters.All(c => word.Contains(c)))
-            .ToList();
+        var filtered = new List<string>();
+        foreach (var word in _remainingWords)
+        {
+            bool allUsedLettersPresent = true;
+            foreach (var c in usedLetters)
+            {
+                if (!word.Contains(c))
+                {
+                    allUsedLettersPresent = false;
+                    break;
+                }
+            }
+            if (allUsedLettersPresent)
+            {
+                filtered.Add(word);
+            }
+        }
+        _remainingWords = filtered;
     }
 
     private void FilterWordsByCorrectLetters(GuessResult previousResult)
@@ -158,9 +173,24 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
             }
         }
 
-        _remainingWords = _remainingWords
-            .Where(word => correctPositions.All(cp => word[cp.index] == cp.letter))
-            .ToList();
+        var filtered = new List<string>();
+        foreach (var word in _remainingWords)
+        {
+            bool allCorrect = true;
+            foreach (var cp in correctPositions)
+            {
+                if (word[cp.index] != cp.letter)
+                {
+                    allCorrect = false;
+                    break;
+                }
+            }
+            if (allCorrect)
+            {
+                filtered.Add(word);
+            }
+        }
+        _remainingWords = filtered;
     }
 
     private void FilterWordsByMisplacedLetters(GuessResult previousResult)
@@ -174,10 +204,24 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
             }
         }
 
-        _remainingWords = _remainingWords
-            .Where(word =>
-                misplacedPositions.All(mp => word.Contains(mp.letter) && word[mp.index] != mp.letter))
-            .ToList();
+        var filtered = new List<string>();
+        foreach (var word in _remainingWords)
+        {
+            bool allMisplaced = true;
+            foreach (var mp in misplacedPositions)
+            {
+                if (!word.Contains(mp.letter) || word[mp.index] == mp.letter)
+                {
+                    allMisplaced = false;
+                    break;
+                }
+            }
+            if (allMisplaced)
+            {
+                filtered.Add(word);
+            }
+        }
+        _remainingWords = filtered;
     }
 
     private void FilterWordsByUnusedLetters(GuessResult previousResult)
@@ -191,10 +235,26 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
             }
         }
 
-        _remainingWords = _remainingWords
-            .Where(word => !unusedLetters.Any(c => word.Contains(c)))
-            .ToList();
+        var filtered = new List<string>();
+        foreach (var word in _remainingWords)
+        {
+            bool containsUnused = false;
+            foreach (var c in unusedLetters)
+            {
+                if (word.Contains(c))
+                {
+                    containsUnused = true;
+                    break;
+                }
+            }
+            if (!containsUnused)
+            {
+                filtered.Add(word);
+            }
+        }
+        _remainingWords = filtered;
     }
+
 
     bool WordHasDupes(string word)
     {
