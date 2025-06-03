@@ -8,7 +8,7 @@ namespace WordleSolver.Strategies;
 /// <summary>
 /// Step 1: create a dictionary that holds how many times each letter appears in the word list
 /// Step 2: always start with the word crane
-/// step 3: filter out words that contain unused letters
+/// step 3: filter out words that dont have used letters
 /// step 4: filter out words that dont have correct letters in the correct spot
 /// step 5: filter out words that have misplaced letters in the same spot
 /// step 6: filter out words that have unused letters again
@@ -103,153 +103,97 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
     /// <returns>A five-letter lowercase word.</returns>
     public string PickNextGuess(GuessResult previousResult)
     {
-        // Analyze previousResult and remove any words from
-        // _remainingWords that aren't possible
-
         if (!previousResult.IsValid)
             throw new InvalidOperationException("PickNextGuess shouldn't be called if previous result isn't valid");
 
-        // Check if first guess
+        // First guess
         if (previousResult.Guesses.Count == 0)
         {
-            // TODO: Pick the best starting word from wordle.txt 
-            // BE CAREFUL that the first word you pick is in that wordle.txt list or your
-            // program won't work. Regular Wordle allows users to guess any five-letter
-            // word from a much larger dictionary, but we restrict it to the words that
-            // can actually be chosen by WordleService to make it easier on you.
             string firstWord = "crane";
-            //string firstWord = GetHighestWordScore(WordList);
-
-            // Filter _remainingWords to remove any words that don't match the first word
             _remainingWords.Remove(firstWord);
-
             return firstWord;
         }
         else
         {
-            // TODO: Analyze the previousResult and reduce/filter _remainingWords based on the feedback
-            // find the used letters
-            List<string> usedLetters = new();
-            char[] letters = previousResult.Word.ToCharArray();
-            for (int i = 0; i < 5; i++)
-            {
-                if (previousResult.LetterStatuses[i] != LetterStatus.Unused)
-                {
-                    usedLetters.Add(letters[i].ToString());
-                }
-            }
+            FilterWordsByUsedLetters(previousResult);
+            FilterWordsByCorrectLetters(previousResult);
+            FilterWordsByMisplacedLetters(previousResult);
 
-            // filter out words that dont contain the used letters
-            for (int word = 0; word < _remainingWords.Count; word++)
-            {
-                for (int letter = 0; letter < usedLetters.Count; letter++)
-                {
-                    if (!_remainingWords[word].Contains(usedLetters[letter]))
-                    {
-                        _remainingWords.RemoveAt(word);
-                        word--;
-                        break;
-                    }
-                }
-            }
-
-            // find all the correct letters and saves their index
-            List<int> goodIndexes = new();
-            List<string> PlacedLetters = new();
-            for (int i = 0; i < 5; i++)
-            {
-                if (previousResult.LetterStatuses[i] == LetterStatus.Correct)
-                {
-                    PlacedLetters.Add(letters[i].ToString());
-                    goodIndexes.Add(i);
-                }
-            }
-
-            // checks if the word contains all the correct letters
-            for (int word = 0; word < _remainingWords.Count; word++)
-            {
-                char[] wordChars = _remainingWords[word].ToCharArray();
-                for (int goodIndex = 0; goodIndex < goodIndexes.Count; goodIndex++)
-                {
-                    int index = goodIndexes[goodIndex];
-                    string letter = PlacedLetters[goodIndex];
-                    char remainLetter = wordChars[index];
-
-                    if (letter != remainLetter.ToString())
-                    {
-                        _remainingWords.RemoveAt(word);
-                        word--;
-                        break;
-                    }
-                }
-            }
-
-            // find all the misplaced letters and saves their index
-            List<int> misplacedIndexes = new();
-            List<string> misplacedLetters = new();
-            for (int i = 0; i < 5; i++)
-            {
-                if (previousResult.LetterStatuses[i] == LetterStatus.Misplaced)
-                {
-                    misplacedLetters.Add(letters[i].ToString());
-                    misplacedIndexes.Add(i);
-                }
-            }
-
-            // removes words from the list if they have a misplaced letter in the same spot as the last guess
-            for (int word = 0; word < _remainingWords.Count; word++)
-            {
-                char[] wordChars = _remainingWords[word].ToCharArray();
-                for (int misplacedIndex = 0; misplacedIndex < misplacedIndexes.Count; misplacedIndex++)
-                {
-                    int index = misplacedIndexes[misplacedIndex];
-                    string letter = misplacedLetters[misplacedIndex];
-                    char remainLetter = wordChars[index];
-
-                    if (letter == remainLetter.ToString())
-                    {
-                        _remainingWords.RemoveAt(word);
-                        word--;
-                        break;
-                    }
-                }
-            }
-
-            // removes words that contain letters we know are unused.
+            // Only filter by unused letters if no duplicate letters in the previous guess
             if (!WordHasDupes(previousResult.Word))
             {
-
-                // stop using words that have an unused letter
-                List<string> unusedLetters = new();
-                char[] previousChars = previousResult.Word.ToCharArray();
-                for (int i = 0; i < 5; i++)
-                {
-                    if (previousResult.LetterStatuses[i] == LetterStatus.Unused)
-                    {
-                        unusedLetters.Add(previousChars[i].ToString());
-                    }
-                }
-
-                for (int word = 0; word < _remainingWords.Count; word++)
-                {
-                    for (int i = 0; i < unusedLetters.Count; i++)
-                    {
-                        if (_remainingWords[word].Contains(unusedLetters[i]))
-                        {
-                            _remainingWords.RemoveAt(word);
-                            word--;
-                            break;
-                        }
-                    }
-                }
+                FilterWordsByUnusedLetters(previousResult);
             }
         }
 
-        // Utilize the remaining words to choose the next guess
         string choice = ChooseBestRemainingWord(previousResult);
         _remainingWords.Remove(choice);
-
         return choice;
+    }
+
+    private void FilterWordsByUsedLetters(GuessResult previousResult)
+    {
+        var usedLetters = new HashSet<char>();
+        for (int i = 0; i < 5; i++)
+        {
+            if (previousResult.LetterStatuses[i] != LetterStatus.Unused)
+            {
+                usedLetters.Add(previousResult.Word[i]);
+            }
+        }
+
+        _remainingWords = _remainingWords
+            .Where(word => usedLetters.All(c => word.Contains(c)))
+            .ToList();
+    }
+
+    private void FilterWordsByCorrectLetters(GuessResult previousResult)
+    {
+        var correctPositions = new List<(int index, char letter)>();
+        for (int i = 0; i < 5; i++)
+        {
+            if (previousResult.LetterStatuses[i] == LetterStatus.Correct)
+            {
+                correctPositions.Add((i, previousResult.Word[i]));
+            }
+        }
+
+        _remainingWords = _remainingWords
+            .Where(word => correctPositions.All(cp => word[cp.index] == cp.letter))
+            .ToList();
+    }
+
+    private void FilterWordsByMisplacedLetters(GuessResult previousResult)
+    {
+        var misplacedPositions = new List<(int index, char letter)>();
+        for (int i = 0; i < 5; i++)
+        {
+            if (previousResult.LetterStatuses[i] == LetterStatus.Misplaced)
+            {
+                misplacedPositions.Add((i, previousResult.Word[i]));
+            }
+        }
+
+        _remainingWords = _remainingWords
+            .Where(word =>
+                misplacedPositions.All(mp => word.Contains(mp.letter) && word[mp.index] != mp.letter))
+            .ToList();
+    }
+
+    private void FilterWordsByUnusedLetters(GuessResult previousResult)
+    {
+        var unusedLetters = new HashSet<char>();
+        for (int i = 0; i < 5; i++)
+        {
+            if (previousResult.LetterStatuses[i] == LetterStatus.Unused)
+            {
+                unusedLetters.Add(previousResult.Word[i]);
+            }
+        }
+
+        _remainingWords = _remainingWords
+            .Where(word => !unusedLetters.Any(c => word.Contains(c)))
+            .ToList();
     }
 
     bool WordHasDupes(string word)
@@ -269,7 +213,7 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
 
         return false;
     }
-    
+
     // find the word in the given list that has the hightest letter frequency score
     string GetHighestWordScore(List<string> words)
     {
