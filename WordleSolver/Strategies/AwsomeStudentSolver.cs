@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using WordleSolver.Services;
 
 namespace WordleSolver.Strategies;
 
@@ -40,6 +41,8 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
     private readonly List<CompletedGame> _completedGames = new();
     private List<GuessResult> _currentGameGuesses = new();
     private GuessResult? _lastResult;
+    private string? _pendingGuess;
+    private int _pendingGuessNumber;
     private int _gameNumber = 0;
     private bool _currentGameSaved = false;
     private bool _reportPrinted = false;
@@ -48,9 +51,9 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
     {
         AppDomain.CurrentDomain.ProcessExit += (_, _) =>
         {
-            if (!_reportPrinted
-                && _gameNumber == ExpectedSimulationGames
-                && _completedGames.Count >= ExpectedSimulationGames - 1)
+            FinalizeCurrentGameIfSolved();
+
+            if (!_reportPrinted && _completedGames.Count > 0)
             {
                 PrintBestAndWorstGames();
             }
@@ -84,15 +87,14 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
     /// <inheritdoc/>
     public void Reset()
     {
-        if (!_currentGameSaved && _lastResult != null && _lastResult.IsCorrect)
-        {
-            SaveCompletedGame(_lastResult);
-        }
+        FinalizeCurrentGameIfSolved();
 
         _gameNumber++;
         _currentGameGuesses = new List<GuessResult>();
         _currentGameSaved = false;
         _lastResult = null;
+        _pendingGuess = null;
+        _pendingGuessNumber = 0;
 
         // If using SLOW student strategy, we just reset the current index
         // to the first word to start the next guessing sequence
@@ -148,6 +150,44 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
             .ToLowerInvariant()
             .Distinct()
             .Sum(letter => LetterScores.TryGetValue(letter, out int score) ? score : 0);
+    }
+
+    private void FinalizeCurrentGameIfSolved()
+    {
+        if (_currentGameSaved)
+        {
+            return;
+        }
+
+        if (_lastResult != null && _lastResult.IsCorrect)
+        {
+            SaveCompletedGame(_lastResult);
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(_pendingGuess) && _pendingGuessNumber < WordleService.MaxGuesses)
+        {
+            SaveInferredCompletedGame();
+        }
+    }
+
+    private void SaveInferredCompletedGame()
+    {
+        string answer = _pendingGuess!;
+        var guesses = new List<GuessResult>(_currentGameGuesses);
+        var solvedResult = new GuessResult
+        {
+            Word = answer,
+            IsCorrect = true,
+            IsValid = true,
+            GuessNumber = _pendingGuessNumber,
+            GuessesRemaining = Math.Max(WordleService.MaxGuesses - _pendingGuessNumber, 0),
+            LetterStatuses = Enumerable.Repeat(LetterStatus.Correct, answer.Length).ToArray()
+        };
+
+        guesses.Add(solvedResult);
+        solvedResult.Guesses = guesses;
+        SaveCompletedGame(solvedResult);
     }
 
     private void SaveCompletedGame(GuessResult solvedResult)
@@ -250,6 +290,8 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
         {
             _lastResult = previousResult;
             _currentGameGuesses = [.. previousResult.Guesses];
+            _pendingGuess = null;
+            _pendingGuessNumber = 0;
 
             if (previousResult.IsCorrect && !_currentGameSaved)
             {
@@ -268,6 +310,7 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
             //Console.WriteLine();
             //Console.WriteLine(firstWord);
 
+            RememberPendingGuess(firstWord, previousResult);
             return firstWord;
         }
         else
@@ -285,7 +328,14 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
 
         string choice = ChooseBestRemainingWord(previousResult);
         _remainingWords.Remove(choice);
+        RememberPendingGuess(choice, previousResult);
         return choice;
+    }
+
+    private void RememberPendingGuess(string guess, GuessResult previousResult)
+    {
+        _pendingGuess = guess;
+        _pendingGuessNumber = previousResult.GuessNumber + 1;
     }
 
     private void FilterWordsByUsedLetters(GuessResult previousResult)
