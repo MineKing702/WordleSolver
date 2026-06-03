@@ -1,6 +1,7 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System.Diagnostics;
 using WordleSolver.Services;
 using WordleSolver.Strategies;
 
@@ -19,4 +20,14 @@ var host = Host.CreateDefaultBuilder()
     .Build();
 
 var runner = host.Services.GetRequiredService<StudentGuesserService>();
+Stopwatch stopWatch = new Stopwatch();
+stopWatch.Start();
+
 runner.Run(2000);
+
+stopWatch.Stop();
+TimeSpan ts = stopWatch.Elapsed;
+string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
+            ts.Hours, ts.Minutes, ts.Seconds,
+            ts.Milliseconds / 10);
+Console.WriteLine("RunTime " + elapsedTime);

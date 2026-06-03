@@ -1,4 +1,3 @@
-
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -106,11 +105,19 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
         if (!previousResult.IsValid)
             throw new InvalidOperationException("PickNextGuess shouldn't be called if previous result isn't valid");
 
+
+
         // First guess
         if (previousResult.Guesses.Count == 0)
         {
             string firstWord = "crane";
             _remainingWords.Remove(firstWord);
+
+            //Console.WriteLine();
+            //Console.WriteLine();
+            //Console.WriteLine();
+            //Console.WriteLine(firstWord);
+
             return firstWord;
         }
         else
@@ -255,6 +262,17 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
         _remainingWords = filtered;
     }
 
+    private void FilterWordsWithDoubles()
+    {
+        for (int i = 0; i < _remainingWords.Count; i++)
+        {
+            if (!WordHasDupes(_remainingWords[i]))
+            {
+                _remainingWords.RemoveAt(i);
+            }
+        }
+    }
+
 
     bool WordHasDupes(string word)
     {
@@ -314,6 +332,8 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
 
         // score each word based on popularity of their letters
         string topWord = GetHighestWordScore(_remainingWords);
+
+        // Console.WriteLine(topWord);
 
         // return _remainingWords.First();
         return topWord;
