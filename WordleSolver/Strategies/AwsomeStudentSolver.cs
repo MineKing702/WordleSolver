@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Net;
+using WordleSolver.Services;
 
 namespace WordleSolver.Strategies;
 
@@ -21,6 +21,13 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
     /// <summary>In-memory dictionary of valid five-letter words.</summary>
     private static readonly List<string> WordList = LoadWordList();
 
+    private const int ExpectedSimulationGames = 2000;
+
+    /// <summary>
+    /// Letter scores used to break ties when reporting the best and worst solved games.
+    /// </summary>
+    private static readonly Dictionary<char, int> LetterScores = BuildLetterScores();
+
     /// <summary>
     /// Remaining words that can be chosen
     /// </summary>
@@ -31,7 +38,36 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
     /// </summary>
     public Dictionary<string, int> LetterPointVal = new();
 
-    // TODO: ADD your own private variables that you might need
+    private readonly List<CompletedGame> _completedGames = new();
+    private List<GuessResult> _currentGameGuesses = new();
+    private GuessResult? _lastResult;
+    private string? _pendingGuess;
+    private int _pendingGuessNumber;
+    private int _gameNumber = 0;
+    private bool _currentGameSaved = false;
+    private bool _reportPrinted = false;
+
+    public AwsomeStudentSolver()
+    {
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            FinalizeCurrentGameIfSolved();
+
+            if (!_reportPrinted && _completedGames.Count > 0)
+            {
+                PrintBestAndWorstGames();
+            }
+        };
+    }
+
+    private sealed class CompletedGame
+    {
+        public int GameNumber { get; set; }
+        public string Answer { get; set; } = string.Empty;
+        public int GuessCount { get; set; }
+        public int WordScore { get; set; }
+        public List<GuessResult> Guesses { get; set; } = new();
+    }
 
     /// <summary>
     /// Loads the dictionary from disk, filtering to distinct five-letter lowercase words.
@@ -51,7 +87,14 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
     /// <inheritdoc/>
     public void Reset()
     {
-        // TODO: What should happen when a new game starts?
+        FinalizeCurrentGameIfSolved();
+
+        _gameNumber++;
+        _currentGameGuesses = new List<GuessResult>();
+        _currentGameSaved = false;
+        _lastResult = null;
+        _pendingGuess = null;
+        _pendingGuessNumber = 0;
 
         // If using SLOW student strategy, we just reset the current index
         // to the first word to start the next guessing sequence
@@ -65,9 +108,6 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
 
     Dictionary<string, int> GetPointDict()
     {
-        // gets an array of the alphabet
-        char[] letters = "abcdefghijklmnopqrstuvwxyz".ToCharArray();
-
         Dictionary<string, int> dict = new();
 
         // loops through each word in the wordlist
@@ -92,6 +132,147 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
         return dict;
     }
 
+    private static Dictionary<char, int> BuildLetterScores()
+    {
+        string path = Path.Combine("data", "wordle.txt");
+
+        return File.ReadAllLines(path)
+            .Select(w => w.Trim().ToLowerInvariant())
+            .Where(w => w.Length == 5)
+            .SelectMany(w => w.Distinct())
+            .GroupBy(c => c)
+            .ToDictionary(g => g.Key, g => g.Count());
+    }
+
+    private static int CalculateWordScore(string word)
+    {
+        return word
+            .ToLowerInvariant()
+            .Distinct()
+            .Sum(letter => LetterScores.TryGetValue(letter, out int score) ? score : 0);
+    }
+
+    private void FinalizeCurrentGameIfSolved()
+    {
+        if (_currentGameSaved)
+        {
+            return;
+        }
+
+        if (_lastResult != null && _lastResult.IsCorrect)
+        {
+            SaveCompletedGame(_lastResult);
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(_pendingGuess) && _pendingGuessNumber < WordleService.MaxGuesses)
+        {
+            SaveInferredCompletedGame();
+        }
+    }
+
+    private void SaveInferredCompletedGame()
+    {
+        string answer = _pendingGuess!;
+        var guesses = new List<GuessResult>(_currentGameGuesses);
+        var solvedResult = new GuessResult
+        {
+            Word = answer,
+            IsCorrect = true,
+            IsValid = true,
+            GuessNumber = _pendingGuessNumber,
+            GuessesRemaining = Math.Max(WordleService.MaxGuesses - _pendingGuessNumber, 0),
+            LetterStatuses = Enumerable.Repeat(LetterStatus.Correct, answer.Length).ToArray()
+        };
+
+        guesses.Add(solvedResult);
+        solvedResult.Guesses = guesses;
+        SaveCompletedGame(solvedResult);
+    }
+
+    private void SaveCompletedGame(GuessResult solvedResult)
+    {
+        string answer = solvedResult.Word;
+
+        _completedGames.Add(new CompletedGame
+        {
+            GameNumber = _gameNumber,
+            Answer = answer,
+            GuessCount = solvedResult.GuessNumber,
+            WordScore = CalculateWordScore(answer),
+            Guesses = solvedResult.Guesses.Count > 0
+                ? new List<GuessResult>(solvedResult.Guesses)
+                : new List<GuessResult>(_currentGameGuesses)
+        });
+
+        _currentGameSaved = true;
+
+        if (_completedGames.Count == ExpectedSimulationGames)
+        {
+            PrintBestAndWorstGames();
+        }
+    }
+
+    private void PrintBestAndWorstGames()
+    {
+        if (_completedGames.Count == 0)
+        {
+            Console.WriteLine("No solved games were recorded.");
+            return;
+        }
+
+        _reportPrinted = true;
+
+        var bestGame = _completedGames
+            .OrderBy(g => g.GuessCount)
+            .ThenByDescending(g => g.WordScore)
+            .First();
+
+        var worstGame = _completedGames
+            .OrderByDescending(g => g.GuessCount)
+            .ThenBy(g => g.WordScore)
+            .First();
+
+        PrintGameSummary("BEST GAME", bestGame);
+        PrintGameSummary("WORST GAME", worstGame);
+    }
+
+    private static void PrintGameSummary(string title, CompletedGame game)
+    {
+        Console.WriteLine();
+        Console.WriteLine(title);
+        Console.WriteLine($"Game #{game.GameNumber}");
+        Console.WriteLine($"Answer: {game.Answer}");
+        Console.WriteLine($"Guesses: {game.GuessCount}");
+        Console.WriteLine($"Word score: {game.WordScore}");
+        Console.WriteLine();
+
+        foreach (var guess in game.Guesses)
+        {
+            PrintColoredGuess(guess);
+        }
+
+        Console.ResetColor();
+    }
+
+    private static void PrintColoredGuess(GuessResult guess)
+    {
+        for (int i = 0; i < guess.Word.Length; i++)
+        {
+            Console.ForegroundColor = guess.LetterStatuses[i] switch
+            {
+                LetterStatus.Correct => ConsoleColor.Green,
+                LetterStatus.Misplaced => ConsoleColor.Yellow,
+                _ => ConsoleColor.Gray
+            };
+
+            Console.Write(char.ToUpperInvariant(guess.Word[i]));
+        }
+
+        Console.ResetColor();
+        Console.WriteLine();
+    }
+
     /// <summary>
     /// Determines the next word to guess given feedback from the previous guess.
     /// </summary>
@@ -105,7 +286,18 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
         if (!previousResult.IsValid)
             throw new InvalidOperationException("PickNextGuess shouldn't be called if previous result isn't valid");
 
+        if (previousResult.GuessNumber > 0 && previousResult.IsValid)
+        {
+            _lastResult = previousResult;
+            _currentGameGuesses = [.. previousResult.Guesses];
+            _pendingGuess = null;
+            _pendingGuessNumber = 0;
 
+            if (previousResult.IsCorrect && !_currentGameSaved)
+            {
+                SaveCompletedGame(previousResult);
+            }
+        }
 
         // First guess
         if (previousResult.Guesses.Count == 0)
@@ -118,6 +310,7 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
             //Console.WriteLine();
             //Console.WriteLine(firstWord);
 
+            RememberPendingGuess(firstWord, previousResult);
             return firstWord;
         }
         else
@@ -135,7 +328,14 @@ public sealed class AwsomeStudentSolver : IWordleSolverStrategy
 
         string choice = ChooseBestRemainingWord(previousResult);
         _remainingWords.Remove(choice);
+        RememberPendingGuess(choice, previousResult);
         return choice;
+    }
+
+    private void RememberPendingGuess(string guess, GuessResult previousResult)
+    {
+        _pendingGuess = guess;
+        _pendingGuessNumber = previousResult.GuessNumber + 1;
     }
 
     private void FilterWordsByUsedLetters(GuessResult previousResult)
